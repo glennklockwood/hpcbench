@@ -1,0 +1,26 @@
+#!/bin/bash
+################################################################################
+#  Controller script for launching pairwise and collective benchmark 
+#  applications in this benchmark suite
+#
+#  Glenn K. Lockwood, San Diego Supercomputer Center            December 2013
+################################################################################
+
+#PBS -N hpl
+#PBS -l nodes=4:ppn=16:native
+#PBS -l walltime=12:00:00
+#PBS -q normal
+#PBS -m e
+
+### openmpi
+# MPIRUN=orterun
+#
+### mvapich2/mpich2
+# MPIRUN="mpirun_rsh -np $(cat $PBS_NODEFILE | wc -l) -hostfile $PBS_NODEFILE"
+MPIRUN=/home/diag/opt/hydra/bin/mpiexec.hydra
+
+if [ ! -z $PBS_O_WORKDIR ]; then
+  cd $PBS_O_WORKDIR
+fi
+
+$MPIRUN ./xhpl 

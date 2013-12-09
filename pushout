@@ -1,0 +1,5 @@
+#!/bin/bash
+for node in $(/bin/cat ./NODES)
+do
+  scp $1 $node:$1
+done

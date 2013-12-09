@@ -1,0 +1,7 @@
+#!/bin/bash
+
+for node in $(/bin/cat ./NODES)
+do
+  ssh $node "$@"
+done
+
