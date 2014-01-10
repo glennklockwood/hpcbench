@@ -1,0 +1,114 @@
+#!/bin/bash
+################################################################################
+#  ib_test - perform point-to-point benchmarking at the InfiniBand verbs layer
+#    analogous to OSU's latency and bw microbenchmarks.
+#
+#  Glenn K. Lockwood and Rick Wagner                              January 2014
+#  San Diego Supercomputer Center
+################################################################################
+#
+# Usage: ib_test <host list file name>
+#
+# Possible tests: 
+# ib_read_bw ib_read_lat
+# ib_send_bw ib_send_lat 
+# ib_write_bw ib_write_lat
+# rdma_bw rdma_lat
+#
+
+TEST_LIST="ib_read_bw ib_write_bw"
+#TEST_LIST="ib_read_lat ib_write_lat"
+
+declare -A test_params
+test_params[ib_read_lat]="--iters=5000 -a"
+test_params[ib_write_lat]="--iters=5000 -a"
+test_params[ib_read_bw]="--iters=5000 -a"
+test_params[ib_write_bw]="--iters=5000 -a"
+
+### SDSC systems
+NUMACTL="/usr/bin/numactl --cpunodebind=0 --membind=0"
+IBBIN=/usr/bin
+
+### TACC Stampede
+#NUMACTL="/usr/bin/numactl --cpunodebind=0 --membind=0"
+#IBBIN=/opt/ofed/bin
+
+DEVICE_LIST="mlx4_0"
+
+if [ "z$1" == "z" ]; then
+  echo "Syntax: $0 <nodefile>" >&2
+  exit 1
+fi
+server=`hostname | cut -d. -f1`
+clients=`cat $1`
+
+serverdir="./$(basename $0).$$"
+i=0
+while [ -d "$1.$i" ]
+do
+  let "i++"
+done
+serverdir="$1.$i"
+mkdir -v $serverdir
+
+### Start logfile
+LOG=$serverdir/log.txt
+cp $1 $LOG
+
+### output topology, if possible
+echo '================================================================================' >> $LOG
+if [ $(uname -n | cut -d. -f2) == "stampede" ]
+then
+  for client in $clients
+  do
+    echo '--------------------------------------------------------------------------------' >> $LOG
+    echo "Trace between $server and $client:" >> $LOG
+    echo "query $server:$client" | nc topo.stampede.tacc.utexas.edu 5678 >> $LOG
+    echo "" >> $LOG
+  done
+fi
+
+### output device info
+IBSBIN=$(sed -e 's/bin/sbin/' <<< $IBBIN)
+echo '================================================================================' >> $LOG
+for device in $DEVICE_LIST
+do
+  echo '--------------------------------------------------------------------------------' >> $LOG
+  echo "Device info for $server:$device" >> $LOG
+  $IBSBIN/ibstatus $device >> $LOG 2>&1
+  for client in $clients
+  do
+    echo '--------------------------------------------------------------------------------' >> $LOG
+    echo "Device info for $client:$device" >> $LOG
+    ssh $client "$IBSBIN/ibstatus $device" >> $LOG 2>&1
+  done
+done
+
+### run the actual test
+echo -n "Running test on $server at " >> $LOG
+echo  `date`  >> $LOG
+
+### loop over all clients
+for client in $clients
+do
+  ### loop over all benchmarks
+  for test in $TEST_LIST
+  do
+    echo -n "Running $test to $client at" >> $LOG
+    echo `date` >> $LOG
+    ### loop over all devices
+    for device in $DEVICE_LIST
+    do
+      output=$serverdir/$client.$device.$test
+      ### start test daemon on $server
+      $NUMACTL $IBBIN/$test ${test_params[$test]} -d $device &
+      sleep 1
+      ### launch test on $client
+      ssh $client "$NUMACTL $IBBIN/$test ${test_params[$test]} -d $device $server" >& $output
+      ### generate list of data (CSV) from test output
+      awk '/^[[:digit:]]*, [^ ]*$/ { print }' $output > $serverdir/$test.csv
+    done
+  done
+done
+
+wait

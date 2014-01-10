@@ -13,7 +13,7 @@
 #    ib_read_bw ib_read_lat
 #    ib_send_bw ib_send_lat 
 #    ib_write_bw ib_write_lat
-#    dma_bw rdma_lat
+#    rdma_bw rdma_lat
 #TEST_LIST="ib_read_bw ib_write_bw"
 #TEST_LIST="ib_read_lat ib_write_lat"
 TEST_LIST="ib_write_lat"
